@@ -1,0 +1,90 @@
+red_seen = False
+got.set_track_recognition_line(line_type=0)
+
+# ── Patched version of AP_centralization_approaching ─────────────────────────
+# Identical logic, but skips the iteration if the tag read is empty instead
+# of crashing. The original function is restored after pickup is done.
+def AP_centralization_approaching_safe(distance=0.15, gap=20, fwd_spd=10, strafe_spd=10):
+    AP_info = got.get_apriltag_total_info()
+    if not AP_info:
+        print("Tag not visible at start of approach — aborting.")
+        return
+
+    while True:
+        AP_info = got.get_apriltag_total_info()
+        
+        if not AP_info:
+            # Tag dropped out for this frame — hold position and wait for it to return
+            got.mecanum_stop()
+            time.sleep(0.1)
+            continue
+
+        AP_x = AP_info[0][1]
+        AP_distance = AP_info[0][6]
+
+        if AP_x < 320 - gap:
+            got.mecanum_move_xyz(-strafe_spd, strafe_spd, 0)
+        elif AP_x > 320 + gap:
+            got.mecanum_move_xyz(strafe_spd, strafe_spd, 0)
+        elif AP_distance > distance:
+            got.mecanum_move_xyz(0, fwd_spd, 0)
+        else:
+            got.mecanum_stop()
+            print("Close enough — stopping.")
+            break
+
+try:
+    # ── Phase 1: Wait for Red then Green ─────────────────────────────────────
+    while True:
+        color = got.get_color_total_info()[0]
+
+        if not red_seen:
+            if color == "Red":
+                got.screen_display_background(3)
+                print("Red detected!")
+                red_seen = True
+        else:
+            if color == "Green":
+                got.screen_display_background(6)
+                print("Green detected!")
+                time.sleep(1)
+                break
+
+    # ── Phase 2: Search for AprilTag ─────────────────────────────────────────
+    print("Searching for AprilTag...")
+    got.mecanum_stop()
+    time.sleep(0.3)
+
+    search_start = time.time()
+    search_timeout = 15
+
+    while True:
+        if time.time() - search_start > search_timeout:
+            print("AprilTag not found within timeout!")
+            got.mecanum_stop()
+            break
+
+        AP_info = got.get_apriltag_total_info()
+
+        if AP_info:
+            print(f"AprilTag found! Distance: {AP_info[0][6]:.2f}m, X: {AP_info[0][1]}")
+            got.mecanum_stop()
+            time.sleep(0.3)
+
+            # ── Phase 3: Approach and pick up ────────────────────────────────
+            AP_centralization_approaching_safe(distance=0.17, gap=20, fwd_spd=10, strafe_spd=5)
+            pick_up()
+            print("Picked up!")
+            time.sleep(2)
+            break
+        else:
+            got.mecanum_move_xyz(0, 8, 0)
+            time.sleep(0.2)
+            got.mecanum_stop()
+            time.sleep(0.15)
+
+    print("Finished!")
+
+except KeyboardInterrupt:
+    got.mecanum_stop()
+    print("Done!")
