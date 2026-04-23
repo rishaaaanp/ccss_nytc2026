@@ -1,0 +1,36 @@
+def line_follow(mult=0.25, speed=35):
+    """Follow the detected line by turning proportionally to the line offset."""
+    offset, line_type, x, y = got.get_single_track_total_info()
+    rotation_speed = int(offset * mult)
+    got.mecanum_move_xyz(x_speed=0, y_speed=speed, z_speed=rotation_speed)
+    return line_type, x, y
+
+
+try:
+    while True:
+        # Read any text currently visible in the camera frame.
+        text = got.get_words_result()
+
+        print("Text:", text)
+
+        # React to specific command words
+        if text == "LEFT":
+            # Turn counter-clockwise by ~45 degrees
+            got.mecanum_turn_speed_times(turn=2, speed=30, times=20, unit=2)
+            break
+        elif text == "RIGHT":
+            # Turn clockwise by ~45 degrees
+            got.mecanum_turn_speed_times(turn=3, speed=30, times=20, unit=2)
+            break
+
+    while True:
+        line_type, _, _ = line_follow(mult=0.25, speed=15)
+
+        if line_type in [0]:
+            break   
+
+    got.mecanum_stop() 
+
+except KeyboardInterrupt:
+    got.mecanum_stop()
+    print("Done!")
